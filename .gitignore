@@ -1,0 +1,21 @@
+# Build artifacts
+build/
+bin/
+*.exe
+*.obj
+*.o
+*.a
+*.lib
+*.dll
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+
