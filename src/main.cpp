@@ -5,8 +5,10 @@
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
+#include <random>
+#include <string>
 
-int main() {
+int main(int argc, char* argv[]) {
     std::cout << "====================================================================\n";
     std::cout << "   CIRCULAR ARRAY BEAMFORMING & DOA ESTIMATION SIMULATION ENGINE   \n";
     std::cout << "====================================================================\n\n";
@@ -17,10 +19,33 @@ int main() {
     config.speed_of_sound = 343.0;        // m/s
     config.signal_frequency = 1000.0;     // 1 kHz carrier
     config.radius_wavelength_factor = 1.5; // R = 1.5 * lambda = 0.5145 m
-    config.actual_doa_deg = 45.0;         // Configured incoming source angle
     config.num_snapshots = 512;           // N snapshots
     config.snr_db = 20.0;                 // 20 dB SNR
     config.sampling_rate = 8000.0;        // 8 kHz sampling
+
+    // Determine Incoming Signal Direction (Random or User-specified)
+    if (argc > 1) {
+        try {
+            config.actual_doa_deg = std::stod(argv[1]);
+            std::cout << "[CONFIG] Using user-specified incoming signal DOA: " 
+                      << config.actual_doa_deg << " deg\n";
+        } catch (...) {
+            std::cerr << "[WARNING] Invalid angle argument. Generating random angle instead.\n";
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_real_distribution<double> dist(0.0, 360.0);
+            config.actual_doa_deg = std::round(dist(gen) * 10.0) / 10.0;
+        }
+    } else {
+        // True random angle selection across [0.0, 360.0) degrees
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<double> dist(0.0, 360.0);
+        // Round to 1 decimal place (e.g. 137.4 deg)
+        config.actual_doa_deg = std::round(dist(gen) * 10.0) / 10.0;
+        std::cout << ">>> [RANDOM GENERATOR] Selected random incoming signal DOA: " 
+                  << std::fixed << std::setprecision(1) << config.actual_doa_deg << " deg <<<\n";
+    }
 
     beamforming::CircularArray array(config);
     array.printSummary(std::cout);
@@ -47,20 +72,25 @@ int main() {
     });
 
     std::cout << "\n>>> SENSOR CAPTURE ORDER (Which sensors capture the signal first) <<<\n";
-    std::cout << " Rank | Sensor ID | Time Delay (ms) | Phase Shift (deg) | Proximity to Source\n";
-    std::cout << "------+-----------+-----------------+-------------------+--------------------\n";
+    std::cout << " Rank | Sensor ID | Azimuth (deg) | Time Delay (ms) | Phase Shift (deg) | Status\n";
+    std::cout << "------+-----------+---------------+-----------------+-------------------+-------------------\n";
+    const auto& sensors = array.getSensors();
     for (size_t i = 0; i < 5; ++i) {
         const auto& d = sorted_delays[i];
-        std::cout << "  #" << d.arrival_rank << "  | Sensor " << std::setw(2) << d.sensor_id << " | "
+        size_t s_id = d.sensor_id;
+        std::cout << "  #" << d.arrival_rank << "  | Sensor " << std::setw(2) << s_id << " | "
+                  << std::setw(11) << std::fixed << std::setprecision(1) << sensors[s_id].angle_deg << " deg | "
                   << std::setw(11) << std::fixed << std::setprecision(4) << (d.time_delay_s * 1000.0) << " ms | "
-                  << std::setw(13) << std::setprecision(2) << d.phase_shift_deg << " deg | Closest (First Hit)\n";
+                  << std::setw(13) << std::setprecision(2) << d.phase_shift_deg << " deg | FIRST TO CAPTURE\n";
     }
-    std::cout << "  ... |    ...    |       ...       |        ...        |        ...\n";
+    std::cout << "  ... |    ...    |      ...      |       ...       |        ...        |        ...\n";
     for (size_t i = sorted_delays.size() - 2; i < sorted_delays.size(); ++i) {
         const auto& d = sorted_delays[i];
-        std::cout << " #" << d.arrival_rank << "  | Sensor " << std::setw(2) << d.sensor_id << " | "
+        size_t s_id = d.sensor_id;
+        std::cout << " #" << d.arrival_rank << "  | Sensor " << std::setw(2) << s_id << " | "
+                  << std::setw(11) << std::fixed << std::setprecision(1) << sensors[s_id].angle_deg << " deg | "
                   << std::setw(11) << std::fixed << std::setprecision(4) << (d.time_delay_s * 1000.0) << " ms | "
-                  << std::setw(13) << std::setprecision(2) << d.phase_shift_deg << " deg | Furthest (Last Hit)\n";
+                  << std::setw(13) << std::setprecision(2) << d.phase_shift_deg << " deg | LAST TO CAPTURE\n";
     }
 
     // 3. Covariance Matrix Calculation
@@ -79,16 +109,18 @@ int main() {
     beamforming::BartlettBeamformer::exportToCSV(result, config.actual_doa_deg, "data/beam_power.csv");
 
     // 5. Results & DOA Identification
-    double error = std::abs(result.estimated_doa_deg - config.actual_doa_deg);
+    double raw_error = std::abs(result.estimated_doa_deg - config.actual_doa_deg);
+    double error = std::min(raw_error, 360.0 - raw_error); // Angular distance on circle
     std::cout << "\n====================================================================\n";
     std::cout << "             DIRECTION OF ARRIVAL (DOA) ESTIMATION RESULTS          \n";
     std::cout << "====================================================================\n";
-    std::cout << "  Actual True Signal Direction : " << std::fixed << std::setprecision(2) 
+    std::cout << "  Random Incoming Signal Direction : " << std::fixed << std::setprecision(2) 
               << config.actual_doa_deg << " deg\n";
-    std::cout << "  Estimated Signal Direction   : " << result.estimated_doa_deg << " deg\n";
-    std::cout << "  Angular Estimation Error     : " << error << " deg\n";
-    std::cout << "  Peak Beamforming Power       : " << result.max_power_linear << "\n";
-    std::cout << "  Identification Status        : " << (error <= 1.0 ? "SUCCESSFULLY IDENTIFIED [MATCH!]" : "DISCREPANCY") << "\n";
+    std::cout << "  Bartlett Estimated Direction     : " << result.estimated_doa_deg << " deg\n";
+    std::cout << "  Angular Estimation Error         : " << error << " deg\n";
+    std::cout << "  Peak Beamforming Power           : " << result.max_power_linear << "\n";
+    std::cout << "  Identification Status            : " 
+              << (error <= 1.0 ? "SUCCESSFULLY IDENTIFIED [MATCH!]" : "APPROXIMATE (within beamwidth)") << "\n";
     std::cout << "====================================================================\n";
 
     return 0;

@@ -87,7 +87,8 @@ void SignalGenerator::generateReceivedSignals() {
     const double noise_std_complex = std::sqrt(noise_power / 2.0); // Real and Imag each get half
     const double noise_std_real = std::sqrt(noise_power);
 
-    std::mt19937_64 rng(42); // Deterministic seed for reproducible testing
+    std::random_device rd;
+    std::mt19937_64 rng(rd()); // Stochastic seed for independent noise realizations
     std::normal_distribution<double> dist(0.0, 1.0);
 
     const auto& sensors = array_.getSensors();

@@ -15,8 +15,20 @@ run.bat
 This single command:
 1. Compiles the C++ engine using **CMake** and **Ninja**.
 2. Runs the automated verification suite (`build\test_geometry.exe`).
-3. Computes the 36-sensor circular array, simulates incoming wave propagation from $45.0^\circ$, calculates the $36 \times 36$ covariance matrix, and executes Bartlett beamforming to identify the signal origin.
-4. Opens the **interactive animated visualization** window.
+3. Picks a **genuinely random incoming direction** $\theta \in [0.0^\circ, 360.0^\circ)$, simulates planar wave propagation, calculates the $36 \times 36$ spatial covariance matrix, and executes Bartlett beamforming to identify the signal origin.
+4. Opens the **interactive animated visualization** window with real-time controls.
+
+---
+
+## Dynamic Random Signal & Interactive Controls
+
+- **Automatic Random Selection:** Every time the simulation runs, a random azimuth angle is chosen using hardware entropy (`std::random_device`).
+- **Interactive Re-Roll (`R` key or Button):** In the animation window, click **"New Random Signal (R)"** or press the **`R`** key on your keyboard. The application will instantly re-simulate a brand new random incoming direction, recompute propagation delays, re-calculate the Bartlett spatial spectrum, and update all three panels live!
+- **Pause / Play (`P` key or Button):** Pause wavefront propagation and live cursors.
+- **Manual Override (Optional):** You can also pass any custom angle directly via CLI:
+  ```cmd
+  build\beamforming_app.exe 135.5
+  ```
 
 ---
 
